@@ -1,64 +1,192 @@
-import Image from "next/image";
+import { getEvents } from "@/services/eventService";
+import { Event } from "@/types/database";
+import NewsletterForm from "@/components/NewsletterForm";
 
-export default function Home() {
+/**
+ * Deterministic date formatter to prevent hydration mismatches.
+ * Uses UTC methods to ensure the same string is rendered on Server and Client.
+ */
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+};
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const currentStatus =
+    typeof params.status === "string" ? params.status : "all";
+  const currentSort = typeof params.sort === "string" ? params.sort : "newest";
+
+  let events: Event[] = [];
+  let errorLoading = false;
+
+  try {
+    events = await getEvents(currentStatus, currentSort);
+  } catch (error) {
+    console.error(error);
+    errorLoading = true;
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-white text-gray-900 font-sans">
+      <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* 1. Hero Section */}
+        <section className="py-20 border-b border-gray-100 text-center">
+          <h1 className="text-4xl font-bold tracking-tight mb-4">
+            Nutcracker Tracker v1
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+            Tracking Nutcracker event presales, public sales, discounts, and
+            group sales. Stay updated on performance dates and ticket
+            availability in one place.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        </section>
+
+        {/* 2. Status Section */}
+        <section className="py-16">
+          <h2 className="text-xl font-bold mb-8 uppercase tracking-widest text-gray-400">
+            Current Event Statuses
+          </h2>
+
+          {errorLoading ? (
+            <div className="p-12 text-center bg-red-50 border border-red-100 rounded-xl">
+              <p className="text-red-600 font-medium">
+                Unable to load events right now.
+              </p>
+              <p className="text-red-400 text-sm mt-1">
+                Please try refreshing the page later.
+              </p>
+            </div>
+          ) : (
+            <>
+              {events.length === 0 ? (
+                <div className="p-12 text-center border-2 border-dashed border-gray-100 rounded-xl">
+                  <p className="text-gray-400">
+                    No events found yet. Check back soon!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-8 md:grid-cols-3">
+                  {events.map((event) => (
+                    <div
+                      key={event.id}
+                      className="flex flex-col p-6 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex-1">
+                        <h3 className="font-bold text-xl leading-tight mb-2">
+                          {event.name}
+                        </h3>
+                        <p className="text-gray-500 text-sm mb-4">
+                          {event.venue_name} • {event.city}
+                        </p>
+
+                        <div
+                          className={`inline-block px-3 py-1 text-xs font-bold rounded-full mb-4 ${
+                            event.status === "Public Sale Live"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {event.status}
+                        </div>
+
+                        {/* v2 Enhanced Ticketing Info (Deterministic Rendering) */}
+                        <div className="space-y-1 mb-4">
+                          {event.presale_start && (
+                            <p className="text-xs text-gray-600">
+                              <span className="font-semibold text-gray-400 uppercase tracking-tighter mr-1">
+                                Presale:
+                              </span>
+                              {formatDate(event.presale_start)}
+                            </p>
+                          )}
+                          {event.public_sale_start && (
+                            <p className="text-xs text-gray-600">
+                              <span className="font-semibold text-gray-400 uppercase tracking-tighter mr-1">
+                                Public:
+                              </span>
+                              {formatDate(event.public_sale_start)}
+                            </p>
+                          )}
+                          {event.group_discount_available && (
+                            <p className="text-xs text-blue-600 font-medium">
+                              Group Discount Available{" "}
+                              {event.group_min_size
+                                ? `(Min: ${event.group_min_size})`
+                                : ""}
+                            </p>
+                          )}
+                          {event.discount_code && (
+                            <p className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded inline-block mt-1">
+                              Code:{" "}
+                              <span className="font-mono font-bold">
+                                {event.discount_code}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+                          Ticket Info
+                        </p>
+                        <p className="text-sm text-gray-600 italic">
+                          {event.discount_note || "Standard ticketing details"}
+                        </p>
+                      </div>
+
+                      {event.source_url && (
+                        <div className="mt-6 pt-4 border-t border-gray-50">
+                          <a
+                            href={event.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800"
+                          >
+                            View Tickets →
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* 3. Newsletter Section */}
+        <section className="py-16 bg-gray-50 border-y border-gray-100 text-center rounded-xl overflow-hidden">
+          <h2 className="text-2xl font-bold mb-2">Newsletter Signup</h2>
+          <p className="text-gray-500 mb-8">
+            Soon you’ll be able to get email alerts when presales start,
+            discounts drop, or group offers go live. For now, use this page to
+            check current Nutcracker events.
+          </p>
+          <NewsletterForm />
+        </section>
+
+        {/* 4. Footer Note */}
+        <footer className="py-10 text-center text-gray-400 text-xs uppercase tracking-tighter">
+          <p>© 2026 Nutcracker Tracker v1 • Free and Open Source</p>
+        </footer>
       </main>
     </div>
   );
