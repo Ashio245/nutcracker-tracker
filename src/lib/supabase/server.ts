@@ -1,22 +1,36 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
-  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL')
-}
-if (!supabaseAnonKey) {
-  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  throw new Error("Missing environment variable: NEXT_PUBLIC_SUPABASE_URL");
 }
 
-/**
- * Returns a Supabase client for use in server‑side code.
- * The client automatically attaches the session cookie via Next.js headers.
- */
-export function createSupabaseServerClient() {
+if (!supabaseAnonKey) {
+  throw new Error(
+    "Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  );
+}
+
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies();
+
   return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: cookies(),
-  })
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Ignore if called from a Server Component where setting cookies is not allowed
+        }
+      },
+    },
+  });
 }
