@@ -1,6 +1,7 @@
 import { getEvents } from "@/services/eventService";
 import { Event } from "@/types/database";
 import NewsletterForm from "@/components/NewsletterForm";
+import Link from "next/link";
 
 /**
  * Deterministic date formatter to prevent hydration mismatches.
@@ -31,6 +32,8 @@ export default async function Home({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
+
+  // Parse params with fallbacks
   const currentStatus =
     typeof params.status === "string" ? params.status : "all";
   const currentSort = typeof params.sort === "string" ? params.sort : "newest";
@@ -44,6 +47,24 @@ export default async function Home({
     console.error(error);
     errorLoading = true;
   }
+
+  // Helper to generate links that preserve existing params
+  const getLink = (status: string, sort: string) => {
+    const search = new URLSearchParams();
+    if (status !== "all") search.set("status", status);
+    if (sort !== "newest") search.set("sort", sort);
+    const queryString = search.toString();
+    return queryString ? `/?${queryString}` : "/";
+  };
+
+  const statusOptions = [
+    "all",
+    "Presale Live",
+    "Public Sale Live",
+    "Group Discount Available",
+    "Sold Out",
+    "Upcoming",
+  ];
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans">
@@ -62,9 +83,56 @@ export default async function Home({
 
         {/* 2. Status Section */}
         <section className="py-16">
-          <h2 className="text-xl font-bold mb-8 uppercase tracking-widest text-gray-400">
-            Current Event Statuses
-          </h2>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+            <div>
+              <h2 className="text-xl font-bold uppercase tracking-widest text-gray-400 mb-4">
+                Current Event Statuses
+              </h2>
+
+              {/* Filter Controls */}
+              <div className="flex flex-wrap gap-2 text-sm">
+                <span className="text-gray-400 mr-2">Status:</span>
+                {statusOptions.map((opt) => (
+                  <Link
+                    key={opt}
+                    href={getLink(opt, currentSort)}
+                    className={`${
+                      currentStatus === opt
+                        ? "font-bold text-gray-900 underline"
+                        : "text-blue-600 hover:text-blue-800"
+                    }`}
+                  >
+                    {opt === "all" ? "All" : opt}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Sort Controls */}
+            <div className="flex gap-4 text-sm whitespace-nowrap">
+              <span className="text-gray-400">Sort:</span>
+              <Link
+                href={getLink(currentStatus, "newest")}
+                className={`${
+                  currentSort === "newest"
+                    ? "font-bold text-gray-900 underline"
+                    : "text-blue-600 hover:text-blue-800"
+                }`}
+              >
+                Newest
+              </Link>
+              <Link
+                href={getLink(currentStatus, "alphabetical")}
+                className={`${
+                  currentSort === "alphabetical"
+                    ? "font-bold text-gray-900 underline"
+                    : "text-blue-600 hover:text-blue-800"
+                }`}
+              >
+                A-Z
+              </Link>
+            </div>
+          </div>
 
           {errorLoading ? (
             <div className="p-12 text-center bg-red-50 border border-red-100 rounded-xl">
@@ -80,7 +148,7 @@ export default async function Home({
               {events.length === 0 ? (
                 <div className="p-12 text-center border-2 border-dashed border-gray-100 rounded-xl">
                   <p className="text-gray-400">
-                    No events found yet. Check back soon!
+                    No events matching these criteria found.
                   </p>
                 </div>
               ) : (

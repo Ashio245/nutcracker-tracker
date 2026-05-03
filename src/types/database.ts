@@ -11,12 +11,15 @@ export interface Event {
   name: string;
   city: string;
   venue_name: string;
-  status: EventStatus; // Now uses the reusable type above
-  presale_date: string | null; // ISO format (YYYY-MM-DD)
-  public_sale_date: string | null; // ISO format (YYYY-MM-DD)
+  status: EventStatus;
+  presale_start: string | null; // ISO format from TIMESTAMPTZ
+  public_sale_start: string | null; // ISO format from TIMESTAMPTZ
+  group_discount_available: boolean | null;
+  group_min_size: number | null;
+  discount_code: string | null;
   discount_note: string | null;
-  group_sales_note: string | null;
-  source_url: string;
+  notes_raw: string | null;
+  source_url: string | null; // Made nullable for safer Supabase compatibility
   created_at: string;
 }
 
