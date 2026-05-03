@@ -26,7 +26,9 @@ export async function POST() {
     // 1. Discovery Phase
     const webUrls = await discoverFromWebSearch();
     const dirUrls = await discoverFromBalletDirectories();
-    const allUrls = [...new Set([...webUrls, ...dirUrls])].slice(0, 100);
+
+    // Fix: Replaced spread operator with Array.from for Set iteration compatibility
+    const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 100);
     stats.discovered = allUrls.length;
 
     for (const url of allUrls) {
