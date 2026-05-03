@@ -23,7 +23,7 @@ function isValidTicketmasterUrl(urlString: string): boolean {
     ];
 
     return allowedPatterns.some(
-      (domain) => host === domain || host.hostname.endsWith("." + domain),
+      (domain) => host === domain || host.endsWith("." + domain),
     );
   } catch {
     return false;
