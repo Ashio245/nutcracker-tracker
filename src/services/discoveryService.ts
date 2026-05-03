@@ -60,10 +60,11 @@ export async function discoverFromWebSearch(): Promise<string[]> {
         /<a\s+[^>]*href="(https?:\/\/[^"]+)"/gi,
       );
 
+      // Fix: Use Array.from() to safely spread RegExp iterators
       const allMatches = [
-        ...standardMatches,
-        ...testIdMatches,
-        ...genericMatches,
+        ...Array.from(standardMatches),
+        ...Array.from(testIdMatches),
+        ...Array.from(genericMatches),
       ];
 
       for (const match of allMatches) {
@@ -77,7 +78,6 @@ export async function discoverFromWebSearch(): Promise<string[]> {
       console.error(`DuckDuckGo discovery failed for ${query}`, e);
     }
   }
-  // Fix: Replaced spread operator with Array.from for Set iteration compatibility
   return Array.from(new Set(urls)).slice(0, 100);
 }
 
@@ -126,9 +126,10 @@ export async function discoverFromBalletDirectories(): Promise<string[]> {
     const domainMatches = html.matchAll(
       /https?:\/\/(www\.)?([a-zA-Z0-9-]+\.(org|com))/g,
     );
-    // Fix: Replaced spread operator with Array.from for Set iteration compatibility
+
+    // Fix: Use Array.from() to handle iterator conversion
     companies = Array.from(
-      new Set(Array.from(domainMatches, (m) => `https://${m[2]}`)),
+      new Set(Array.from(domainMatches).map((m) => `https://${m[2]}`)),
     ).slice(0, 30);
   } catch (e) {
     companies = FALLBACK_COMPANIES.map((c) => `https://${c}`);
