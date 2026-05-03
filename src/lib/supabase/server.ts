@@ -17,7 +17,7 @@ if (!supabaseAnonKey) {
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -28,7 +28,7 @@ export async function createSupabaseServerClient() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // Ignore if called from a Server Component where setting cookies is not allowed
+          // Ignore if called in a context where cookies cannot be set
         }
       },
     },
