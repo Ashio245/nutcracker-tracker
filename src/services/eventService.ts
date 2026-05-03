@@ -34,24 +34,28 @@ export function prepareEventData(
 }
 
 /**
- * NEW EXPORT: Handles Ticketmaster-specific event imports.
- * Accepts a URL or a pre-parsed metadata object to support multiple route signatures.
+ * Handles Ticketmaster-specific event imports.
+ * Returns a dual-compatible shape to satisfy various API route requirements.
  */
 export async function importTicketmasterEvent(
   input: string | Partial<Event>,
-): Promise<{ added: boolean; event?: Event; error?: string }> {
+): Promise<{
+  success: boolean;
+  added: boolean;
+  message?: string;
+  event?: Event;
+  error?: string;
+}> {
   try {
     let eventData: Omit<Event, "id" | "created_at">;
 
     if (typeof input === "string") {
-      // If input is just a URL, create a minimal stub that discovery services will fill later
       eventData = prepareEventData({
         source_url: input,
         name: "Ticketmaster Performance",
         notes_raw: "Imported via direct Ticketmaster URL",
       });
     } else {
-      // If input is a payload object, sanitize it
       eventData = prepareEventData(input);
     }
 
@@ -66,13 +70,23 @@ export async function importTicketmasterEvent(
 
     if (error) throw error;
 
-    return { added: true, event: data };
+    return {
+      success: true,
+      added: true,
+      message: "Successfully imported",
+      event: data,
+    };
   } catch (err: any) {
     console.error(
       "[eventService] importTicketmasterEvent failed:",
       err.message,
     );
-    return { added: false, error: err.message };
+    return {
+      success: false,
+      added: false,
+      message: err.message,
+      error: err.message,
+    };
   }
 }
 
