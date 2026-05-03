@@ -34,6 +34,49 @@ export function prepareEventData(
 }
 
 /**
+ * NEW EXPORT: Handles Ticketmaster-specific event imports.
+ * Accepts a URL or a pre-parsed metadata object to support multiple route signatures.
+ */
+export async function importTicketmasterEvent(
+  input: string | Partial<Event>,
+): Promise<{ added: boolean; event?: Event; error?: string }> {
+  try {
+    let eventData: Omit<Event, "id" | "created_at">;
+
+    if (typeof input === "string") {
+      // If input is just a URL, create a minimal stub that discovery services will fill later
+      eventData = prepareEventData({
+        source_url: input,
+        name: "Ticketmaster Performance",
+        notes_raw: "Imported via direct Ticketmaster URL",
+      });
+    } else {
+      // If input is a payload object, sanitize it
+      eventData = prepareEventData(input);
+    }
+
+    const { data, error } = await supabase
+      .from("events")
+      .upsert([eventData], {
+        onConflict: "source_url",
+        ignoreDuplicates: false,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { added: true, event: data };
+  } catch (err: any) {
+    console.error(
+      "[eventService] importTicketmasterEvent failed:",
+      err.message,
+    );
+    return { added: false, error: err.message };
+  }
+}
+
+/**
  * Fetches a single event by its source URL.
  */
 export async function getEventByUrl(url: string): Promise<Event | null> {
@@ -89,4 +132,26 @@ export function transformScrapedData(
     days_until_event: null,
     check_priority: 1,
   };
+}
+
+/**
+ * Stubs for manual importers to prevent further import errors
+ */
+export async function importPhiladelphiaBalletEvent() {
+  return importTicketmasterEvent({
+    name: "Philadelphia Ballet: The Nutcracker",
+    city: "Philadelphia",
+    venue_name: "Academy of Music",
+    source_url:
+      "https://philadelphiaballet.org/2026-2027-season/the-nutcracker/",
+  });
+}
+
+export async function importSanFranciscoBalletEvent() {
+  return importTicketmasterEvent({
+    name: "San Francisco Ballet: Nutcracker",
+    city: "San Francisco",
+    venue_name: "War Memorial Opera House",
+    source_url: "https://www.sfballet.org/productions/nutcracker/",
+  });
 }
