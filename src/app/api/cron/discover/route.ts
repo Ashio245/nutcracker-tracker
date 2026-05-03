@@ -26,10 +26,12 @@ export async function GET(request: Request) {
     insert_errors: 0,
   };
 
-  // 1. Discovery Phase
+  // 1. Discovery Phase (Find and Queue)
   const webUrls = await discoverFromWebSearch();
   const dirUrls = await discoverFromBalletDirectories();
-  const allUrls = [...new Set([...webUrls, ...dirUrls])].slice(0, 100);
+
+  // FIX: Replaced spread operator with Array.from for Set iteration compatibility
+  const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 100);
   stats.discovered = allUrls.length;
 
   for (const url of allUrls) {
@@ -40,23 +42,16 @@ export async function GET(request: Request) {
     else stats.queued++;
   }
 
-  // 2. Conservative Batch Validation (15 URLs)
-  const { data: queue, error: qError } = await supabase
+  // 2. Batch Processing Phase (Process 15 unattempted)
+  const { data: queue } = await supabase
     .from("discovery_queue")
     .select("*")
     .eq("attempted", false)
     .limit(15);
 
-  if (qError)
-    return NextResponse.json(
-      { error: "Failed to fetch queue", details: qError.message },
-      { status: 500 },
-    );
-
   if (queue) {
     for (const item of queue) {
       const validation = await validateEventPage(item.url);
-
       let isValid = validation.valid;
       let isAdded = false;
 
