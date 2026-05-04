@@ -64,7 +64,8 @@ export default function NutcrackerConsole() {
     setErrorMsg(null);
     setLastLogs(null);
 
-    const endpoint = action === "discovery" ? "/api/discover" : "/api/monitor";
+    const endpoint =
+      action === "discovery" ? "/api/discover/run" : "/api/monitor/run";
 
     try {
       const response = await fetch(endpoint, { method: "POST" });
@@ -122,7 +123,6 @@ export default function NutcrackerConsole() {
   return (
     <div className="min-h-screen bg-[#0f1115] text-slate-200 px-4 pb-4 pt-24 md:px-8 md:pb-8 md:pt-28 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* HEADER */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
@@ -155,7 +155,6 @@ export default function NutcrackerConsole() {
           </div>
         </header>
 
-        {/* KPI CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             {
@@ -200,7 +199,6 @@ export default function NutcrackerConsole() {
           ))}
         </div>
 
-        {/* ACTION PANEL */}
         <div className="mac-card p-4 border-white/5 bg-white/5">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -271,7 +269,6 @@ export default function NutcrackerConsole() {
           )}
         </div>
 
-        {/* DESKTOP TABLE */}
         <div className="hidden md:block mac-card overflow-hidden border-white/5">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -388,7 +385,6 @@ export default function NutcrackerConsole() {
           </div>
         </div>
 
-        {/* MOBILE CARD VIEW */}
         <div className="md:hidden flex flex-col gap-4">
           {loading ? (
             <div className="p-10 text-center text-slate-500 italic">

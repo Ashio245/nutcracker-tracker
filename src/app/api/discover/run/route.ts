@@ -1,78 +1,52 @@
-import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import {
-  discoverFromWebSearch,
-  discoverFromBalletDirectories,
-} from "@/services/discoveryService";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
-/**
- * AGGRESSIVE TIMEOUT PATCH (V6):
- * - Temporarily disabled slow Ticketmaster scraping.
- * - Limited discovery to 20 URLs total.
- * - Uses a single batch insert to minimize DB round-trips.
- * - Safely ignores duplicates to avoid resetting 'attempted' status.
- */
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
+export async function POST(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+
+  if (!secret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET is not configured on the server" },
+      { status: 500 },
+    );
   }
 
-  const stats = {
-    discovered: 0,
-    queued: 0,
-    errors: 0,
-  };
-
   try {
-    // 1. Trigger only fast discovery sources
-    const [webUrls, dirUrls] = await Promise.all([
-      discoverFromWebSearch(),
-      discoverFromBalletDirectories(),
-    ]);
+    const { origin } = new URL(request.url);
+    const targetUrl = `${origin}/api/cron/discover`;
 
-    // 2. Consolidate and cap at 20 URLs for maximum safety
-    const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 20);
-    stats.discovered = allUrls.length;
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
+      cache: "no-store",
+    });
 
-    if (allUrls.length > 0) {
-      // 3. Single Batch Upsert with duplicate ignore
-      // This is significantly faster than looping for individual inserts
-      const { data, error } = await supabase
-        .from("discovery_queue")
-        .upsert(
-          allUrls.map((url) => ({
-            url,
-            source: "cron_discovery_v6_fast",
-            attempted: false,
-          })),
-          {
-            onConflict: "url",
-            ignoreDuplicates: true, // Critical: preserve 'attempted' state of existing rows
-          },
-        )
-        .select("url");
+    const raw = await response.text();
+    const contentType = response.headers.get("content-type") || "";
 
-      if (error) {
-        stats.errors = allUrls.length;
-        throw error;
-      }
-
-      stats.queued = data?.length || 0;
+    if (contentType.includes("application/json")) {
+      return new NextResponse(raw, {
+        status: response.status,
+        headers: { "content-type": "application/json" },
+      });
     }
 
-    return NextResponse.json({
-      status: "discovery_fast_complete",
-      timestamp: new Date().toISOString(),
-      stats,
-      message:
-        "Batch processing enabled; slow sources bypassed for performance.",
-    });
+    return NextResponse.json(
+      {
+        error: "Cron route did not return JSON",
+        status: response.status,
+        preview: raw.slice(0, 300),
+      },
+      { status: 500 },
+    );
   } catch (error: any) {
-    console.error("[cron/discover] Fast Producer Error:", error.message);
-    return NextResponse.json({ error: error.message, stats }, { status: 500 });
+    console.error("[api/discover/run] Wrapper Error:", error.message);
+    return NextResponse.json(
+      { error: "Failed to trigger discovery", details: error.message },
+      { status: 500 },
+    );
   }
 }
