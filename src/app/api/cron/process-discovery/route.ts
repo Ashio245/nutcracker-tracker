@@ -8,6 +8,13 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/**
+ * CONSUMER ROUTE:
+ * - Reads a small batch of unattempted items from discovery_queue.
+ * - Fetches/Validates the pages.
+ * - Inserts valid events into the main database.
+ * - Updates the queue status.
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -15,29 +22,33 @@ export async function GET(request: Request) {
   }
 
   const stats = {
-    processed: 0,
+    batch_size: 0,
     validated: 0,
     added: 0,
     errors: 0,
   };
 
   try {
-    // 1. Fetch small batch of unattempted items
+    // 1. Fetch small batch (5 items) to ensure we finish within 60s
     const { data: queue, error: fetchError } = await supabase
       .from("discovery_queue")
       .select("*")
       .eq("attempted", false)
-      .limit(5); // Small batch to prevent Vercel timeouts
+      .order("created_at", { ascending: true })
+      .limit(5);
 
     if (fetchError) throw fetchError;
     if (!queue || queue.length === 0) {
-      return NextResponse.json({ status: "idle", message: "Queue empty" });
+      return NextResponse.json({
+        status: "idle",
+        message: "No items to process",
+      });
     }
 
-    for (const item of queue) {
-      stats.processed++;
+    stats.batch_size = queue.length;
 
-      // 2. Validate and Extract (Slow Phase)
+    for (const item of queue) {
+      // 2. Execute the slow fetch/validate/extract logic
       const validation = await validateTicketmasterEvent(item.url);
       let isAdded = false;
 
@@ -52,27 +63,28 @@ export async function GET(request: Request) {
         }
       }
 
-      // 3. Mark row as attempted immediately to prevent loops
+      // 3. IMMEDIATELY update queue status to avoid re-processing on next run
       await supabase
         .from("discovery_queue")
         .update({
           attempted: true,
           validated: validation.valid,
           added_to_events: isAdded,
+          last_processed_at: new Date().toISOString(),
         })
         .eq("id", item.id);
 
-      // Brief sleep between fetches to avoid rate limits
-      await new Promise((r) => setTimeout(r, 1000));
+      // Respectful delay to prevent Ticketmaster rate limiting
+      await new Promise((r) => setTimeout(r, 1500));
     }
 
     return NextResponse.json({
-      status: "success",
+      status: "processing_complete",
       timestamp: new Date().toISOString(),
       stats,
     });
   } catch (error: any) {
-    console.error("[cron/process-discovery] Worker Failure:", error.message);
+    console.error("[cron/process-discovery] Worker Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

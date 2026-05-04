@@ -1,86 +1,76 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import {
+  discoverFromTicketmasterWeb,
   discoverFromWebSearch,
   discoverFromBalletDirectories,
-  validateEventPage,
-  extractEventMetadata,
-  addDiscoveredEvent,
 } from "@/services/discoveryService";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
+/**
+ * PRODUCER ROUTE (SAFETY PATCHED):
+ * - Discovers URLs from various sources.
+ * - Inserts only NEW URLs into the discovery_queue.
+ * - Prevents reprocessing by ignoring existing rows.
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`)
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response("Unauthorized", { status: 401 });
+  }
 
   const stats = {
     discovered: 0,
     queued: 0,
-    validated: 0,
-    added: 0,
-    validation_errors: 0,
-    queue_errors: 0,
-    insert_errors: 0,
+    errors: 0,
   };
 
-  // 1. Discovery Phase (Find and Queue)
-  const webUrls = await discoverFromWebSearch();
-  const dirUrls = await discoverFromBalletDirectories();
+  try {
+    // 1. Trigger multi-source discovery (Searching only)
+    const [tmUrls, webUrls, dirUrls] = await Promise.all([
+      discoverFromTicketmasterWeb(),
+      discoverFromWebSearch(),
+      discoverFromBalletDirectories(),
+    ]);
 
-  // FIX: Replaced spread operator with Array.from for Set iteration compatibility
-  const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 100);
-  stats.discovered = allUrls.length;
+    // 2. Consolidate and deduplicate discovery set
+    const allUrls = Array.from(new Set([...tmUrls, ...webUrls, ...dirUrls]));
+    stats.discovered = allUrls.length;
 
-  for (const url of allUrls) {
-    const { error } = await supabase
-      .from("discovery_queue")
-      .upsert({ url, source: "cron_discovery" }, { onConflict: "url" });
-    if (error) stats.queue_errors++;
-    else stats.queued++;
-  }
-
-  // 2. Batch Processing Phase (Process 15 unattempted)
-  const { data: queue } = await supabase
-    .from("discovery_queue")
-    .select("*")
-    .eq("attempted", false)
-    .limit(15);
-
-  if (queue) {
-    for (const item of queue) {
-      const validation = await validateEventPage(item.url);
-      let isValid = validation.valid;
-      let isAdded = false;
-
-      if (isValid && validation.html) {
-        const meta = extractEventMetadata(item.url, validation.html);
-        const res = await addDiscoveredEvent(meta);
-        isAdded = res.added;
-        if (res.error) stats.insert_errors++;
-      } else if (!isValid) {
-        stats.validation_errors++;
-      }
-
-      await supabase
+    // 3. Safety-First Insertion
+    // We use ignoreDuplicates: true to ensure we never reset 'attempted' status
+    // for URLs that have already been processed by the consumer route.
+    for (const url of allUrls) {
+      const { error } = await supabase
         .from("discovery_queue")
-        .update({
-          attempted: true,
-          validated: isValid,
-          added_to_events: isAdded,
+        .insert({
+          url,
+          source: "cron_discovery_v5",
+          attempted: false,
         })
-        .eq("id", item.id);
+        .select()
+        .single();
 
-      if (isValid) stats.validated++;
-      if (isAdded) stats.added++;
+      // Note: If the row already exists, Supabase will return a 409 or simply no data
+      // depending on the client config, which we treat as 'not newly queued'.
+      if (error && error.code !== "23505") {
+        // Ignore unique constraint violations
+        stats.errors++;
+      } else if (!error) {
+        stats.queued++;
+      }
     }
-  }
 
-  return NextResponse.json({
-    status: "completed",
-    timestamp: new Date().toISOString(),
-    stats,
-  });
+    return NextResponse.json({
+      status: "discovery_complete",
+      timestamp: new Date().toISOString(),
+      stats,
+      message: `Safety patch applied: ignored duplicates to prevent reprocessing loops.`,
+    });
+  } catch (error: any) {
+    console.error("[cron/discover] Logic Error:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
