@@ -108,18 +108,20 @@ export async function discoverFromTicketmasterAPI(): Promise<string[]> {
 
     if (!response.ok) return [];
 
-    const data = await response.json();
-    const events = data._embedded?.events || [];
+    const data: any = await response.json();
+    const events = Array.isArray(data?._embedded?.events)
+      ? data._embedded.events
+      : [];
 
-    const discoveredUrls = events
-      .map((event: any) => event.url)
-      .filter((url: string) => {
-        if (!url) return false;
+    const discoveredUrls: string[] = events
+      .map((event: any) => event?.url)
+      .filter((url: unknown): url is string => {
+        if (typeof url !== "string" || !url) return false;
         const isResale = RESALE_MARKERS.some((marker) => marker.test(url));
         return !isResale;
       });
 
-    return Array.from(new Set(discoveredUrls)).slice(0, 50);
+    return Array.from(new Set<string>(discoveredUrls)).slice(0, 50);
   } catch (e: any) {
     console.error(
       "[discoveryService] Ticketmaster API discovery failed:",
