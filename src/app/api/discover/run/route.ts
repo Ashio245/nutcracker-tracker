@@ -1,82 +1,60 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import {
-  discoverFromWebSearch,
-  discoverFromBalletDirectories,
-  validateEventPage,
-  extractEventMetadata,
+  discoverFromTicketmasterWeb,
+  validateTicketmasterEvent,
   addDiscoveredEvent,
+  discoverFromTicketmasterAPI,
 } from "@/services/discoveryService";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST() {
   const stats = {
-    discovered: 0,
-    queued: 0,
-    validated: 0,
-    added: 0,
-    validation_errors: 0,
-    queue_errors: 0,
-    insert_errors: 0,
+    tm_api_added: 0,
+    tm_web_discovered: 0,
+    tm_web_processed: 0,
+    tm_web_added: 0,
+    errors: 0,
   };
 
   try {
-    // 1. Discovery Phase
-    const webUrls = await discoverFromWebSearch();
-    const dirUrls = await discoverFromBalletDirectories();
+    // 1. Optional API Discovery
+    stats.tm_api_added = await discoverFromTicketmasterAPI();
 
-    // Fix: Replaced spread operator with Array.from for Set iteration compatibility
-    const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 100);
-    stats.discovered = allUrls.length;
+    // 2. Requirement 1: Limit Route Work
+    // Discover many, but process a small batch to stay under maxDuration
+    const webUrls = await discoverFromTicketmasterWeb();
+    stats.tm_web_discovered = webUrls.length;
 
-    for (const url of allUrls) {
-      const { error } = await supabase
-        .from("discovery_queue")
-        .upsert({ url, source: "manual_trigger" }, { onConflict: "url" });
-      if (error) stats.queue_errors++;
-      else stats.queued++;
-    }
+    // Only process the first 15 URLs per run for safety on Vercel
+    const batchToProcess = webUrls.slice(0, 15);
 
-    // 2. Batch Processing Phase (Process 15 URLs)
-    const { data: queue } = await supabase
-      .from("discovery_queue")
-      .select("*")
-      .eq("attempted", false)
-      .limit(15);
+    for (const url of batchToProcess) {
+      stats.tm_web_processed++;
 
-    if (queue) {
-      for (const item of queue) {
-        const validation = await validateEventPage(item.url);
-        let isValid = validation.valid;
-        let isAdded = false;
+      const validation = await validateTicketmasterEvent(url);
 
-        if (isValid && validation.html) {
-          const meta = extractEventMetadata(item.url, validation.html);
-          const res = await addDiscoveredEvent(meta);
-          isAdded = res.added;
-          if (res.error) stats.insert_errors++;
-        } else if (!isValid) {
-          stats.validation_errors++;
+      if (validation.valid && validation.metadata) {
+        const res = await addDiscoveredEvent(validation.metadata);
+        if (res.added) {
+          stats.tm_web_added++;
+        } else {
+          stats.errors++;
         }
-
-        await supabase
-          .from("discovery_queue")
-          .update({
-            attempted: true,
-            validated: isValid,
-            added_to_events: isAdded,
-          })
-          .eq("id", item.id);
-
-        if (isValid) stats.validated++;
-        if (isAdded) stats.added++;
       }
+
+      // Minimal sleep to respect Ticketmaster rate limits
+      await new Promise((r) => setTimeout(r, 1200));
     }
 
-    return NextResponse.json({ status: "completed", stats });
+    return NextResponse.json({
+      status: "completed",
+      stats,
+      message: `Processed ${stats.tm_web_processed} of ${stats.tm_web_discovered} discovered URLs.`,
+    });
   } catch (error: any) {
+    console.error("[api/discover/run] Critical error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
