@@ -41,7 +41,7 @@ export async function discoverFromTicketmasterAPI(): Promise<number> {
 }
 
 /**
- * Requirement: Flexible Ticketmaster URL Extraction.
+ * Flexible Ticketmaster URL Extraction.
  * Extracts hrefs and supports various path structures containing /event/.
  */
 export async function discoverFromTicketmasterWeb(): Promise<string[]> {
@@ -125,7 +125,6 @@ export async function validateTicketmasterEvent(url: string) {
       if (stateMatch) {
         try {
           const state = JSON.parse(stateMatch[1]);
-          // Common Ticketmaster/Next.js state paths for event metadata
           const details =
             state?.props?.pageProps?.event || state?.eventData || state?.event;
           if (details) {
@@ -173,14 +172,60 @@ export async function validateTicketmasterEvent(url: string) {
       discount_note: null,
     };
 
-    return { valid: true, metadata };
+    return { valid: true, metadata, html }; // Added html to return for legacy support
   } catch (e) {
     return { valid: false };
   }
 }
 
 /**
- * Requirement: Normalized return shape.
+ * BACKWARD COMPATIBILITY: validateEventPage
+ * Required by src/app/api/cron/discover/route.ts
+ */
+export async function validateEventPage(
+  url: string,
+): Promise<{ valid: boolean; html?: string }> {
+  const result = await validateTicketmasterEvent(url);
+  return {
+    valid: result.valid,
+    html: result.html,
+  };
+}
+
+/**
+ * BACKWARD COMPATIBILITY: extractEventMetadata
+ * Required by legacy discovery routes.
+ */
+export function extractEventMetadata(
+  url: string,
+  html: string,
+): Omit<Event, "id" | "created_at"> {
+  const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+  const h1Match = html.match(/<h1>(.*?)<\/h1>/i);
+  const hostname = new URL(url).hostname.replace("www.", "");
+
+  return {
+    name: h1Match?.[1]?.trim() || titleMatch?.[1]?.trim() || "The Nutcracker",
+    city: "Unknown",
+    venue_name: "TBA",
+    status: "Upcoming",
+    source_url: url,
+    notes_raw: `Auto-discovered from ${hostname}`,
+    last_checked: new Date().toISOString(),
+    content_hash: null,
+    days_until_event: null,
+    check_priority: 1,
+    presale_start: null,
+    public_sale_start: null,
+    group_discount_available: false,
+    group_min_size: null,
+    discount_code: null,
+    discount_note: null,
+  };
+}
+
+/**
+ * Upserts discovered event and returns normalized shape.
  */
 export async function addDiscoveredEvent(
   metadata: Partial<Event>,
