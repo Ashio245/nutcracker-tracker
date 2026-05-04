@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import {
-  discoverFromTicketmasterWeb,
   discoverFromWebSearch,
   discoverFromBalletDirectories,
 } from "@/services/discoveryService";
@@ -10,10 +9,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * PRODUCER ROUTE (SAFETY PATCHED):
- * - Discovers URLs from various sources.
- * - Inserts only NEW URLs into the discovery_queue.
- * - Prevents reprocessing by ignoring existing rows.
+ * AGGRESSIVE TIMEOUT PATCH (V6):
+ * - Temporarily disabled slow Ticketmaster scraping.
+ * - Limited discovery to 20 URLs total.
+ * - Uses a single batch insert to minimize DB round-trips.
+ * - Safely ignores duplicates to avoid resetting 'attempted' status.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -28,49 +28,51 @@ export async function GET(request: Request) {
   };
 
   try {
-    // 1. Trigger multi-source discovery (Searching only)
-    const [tmUrls, webUrls, dirUrls] = await Promise.all([
-      discoverFromTicketmasterWeb(),
+    // 1. Trigger only fast discovery sources
+    const [webUrls, dirUrls] = await Promise.all([
       discoverFromWebSearch(),
       discoverFromBalletDirectories(),
     ]);
 
-    // 2. Consolidate and deduplicate discovery set
-    const allUrls = Array.from(new Set([...tmUrls, ...webUrls, ...dirUrls]));
+    // 2. Consolidate and cap at 20 URLs for maximum safety
+    const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 20);
     stats.discovered = allUrls.length;
 
-    // 3. Safety-First Insertion
-    // We use ignoreDuplicates: true to ensure we never reset 'attempted' status
-    // for URLs that have already been processed by the consumer route.
-    for (const url of allUrls) {
-      const { error } = await supabase
+    if (allUrls.length > 0) {
+      // 3. Single Batch Upsert with duplicate ignore
+      // This is significantly faster than looping for individual inserts
+      const { data, error } = await supabase
         .from("discovery_queue")
-        .insert({
-          url,
-          source: "cron_discovery_v5",
-          attempted: false,
-        })
-        .select()
-        .single();
+        .upsert(
+          allUrls.map((url) => ({
+            url,
+            source: "cron_discovery_v6_fast",
+            attempted: false,
+          })),
+          {
+            onConflict: "url",
+            ignoreDuplicates: true, // Critical: preserve 'attempted' state of existing rows
+          },
+        )
+        .select("url");
 
-      // Note: If the row already exists, Supabase will return a 409 or simply no data
-      // depending on the client config, which we treat as 'not newly queued'.
-      if (error && error.code !== "23505") {
-        // Ignore unique constraint violations
-        stats.errors++;
-      } else if (!error) {
-        stats.queued++;
+      if (error) {
+        stats.errors = allUrls.length;
+        throw error;
       }
+
+      stats.queued = data?.length || 0;
     }
 
     return NextResponse.json({
-      status: "discovery_complete",
+      status: "discovery_fast_complete",
       timestamp: new Date().toISOString(),
       stats,
-      message: `Safety patch applied: ignored duplicates to prevent reprocessing loops.`,
+      message:
+        "Batch processing enabled; slow sources bypassed for performance.",
     });
   } catch (error: any) {
-    console.error("[cron/discover] Logic Error:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[cron/discover] Fast Producer Error:", error.message);
+    return NextResponse.json({ error: error.message, stats }, { status: 500 });
   }
 }
