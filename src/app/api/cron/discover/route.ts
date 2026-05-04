@@ -3,14 +3,14 @@ import { supabase } from "@/lib/supabase";
 import {
   discoverFromWebSearch,
   discoverFromBalletDirectories,
-  discoverFromTicketmasterWeb,
+  discoverFromTicketmasterAPI,
 } from "@/services/discoveryService";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Updated Protected Discovery Route
- * Orchestrates URL gathering from Search, Directories, and Ticketmaster Web.
+ * Orchestrates URL gathering from Search, Directories, and Ticketmaster API.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const [webUrls, dirUrls, tmUrls] = await Promise.all([
       discoverFromWebSearch(),
       discoverFromBalletDirectories(),
-      discoverFromTicketmasterWeb(),
+      discoverFromTicketmasterAPI(),
     ]);
 
     // Merge and deduplicate all discovered candidate URLs

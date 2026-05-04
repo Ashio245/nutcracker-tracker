@@ -91,40 +91,42 @@ export async function discoverFromBalletDirectories(): Promise<string[]> {
 }
 
 /**
- * PURE DISCOVERY: Ticketmaster Web
- * Improved scraper to reliably extract Ticketmaster event URLs.
+ * PURE DISCOVERY: Ticketmaster Discovery API
+ * Replaces the previous HTML scraping function with a structured API call.
  */
-export async function discoverFromTicketmasterWeb(): Promise<string[]> {
-  const searchUrl = "https://www.ticketmaster.com/search?q=nutcracker";
-  const discoveredUrls: string[] = [];
-
-  try {
-    const response = await fetch(searchUrl, {
-      headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return [];
-
-    const html = await response.text();
-    // Targeted regex to capture absolute and relative event links
-    const hrefPattern =
-      /href=["']((?:https:\/\/www\.ticketmaster\.com)?\/event\/[^"']+)["']/gi;
-    const matches = Array.from(html.matchAll(hrefPattern));
-
-    for (const match of matches) {
-      let url = match[1];
-      if (url.startsWith("/")) url = `https://www.ticketmaster.com${url}`;
-
-      const isResaleUrl = RESALE_MARKERS.some((marker) => marker.test(url));
-      if (!isResaleUrl && !discoveredUrls.includes(url)) {
-        discoveredUrls.push(url);
-      }
-    }
-  } catch (e) {
-    console.error("[discoveryService] TM search discovery failed", e);
+export async function discoverFromTicketmasterAPI(): Promise<string[]> {
+  const apiKey = process.env.TICKETMASTER_API_KEY;
+  if (!apiKey) {
+    return [];
   }
 
-  return discoveredUrls.slice(0, 50);
+  try {
+    const response = await fetch(
+      `https://app.ticketmaster.com/discovery/v2/events.json?keyword=nutcracker&classificationName=Ballet&size=50&apikey=${apiKey}`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const events = data._embedded?.events || [];
+
+    const discoveredUrls = events
+      .map((event: any) => event.url)
+      .filter((url: string) => {
+        if (!url) return false;
+        const isResale = RESALE_MARKERS.some((marker) => marker.test(url));
+        return !isResale;
+      });
+
+    return Array.from(new Set(discoveredUrls)).slice(0, 50);
+  } catch (e: any) {
+    console.error(
+      "[discoveryService] Ticketmaster API discovery failed:",
+      e.message,
+    );
+    return [];
+  }
 }
 
 /**
