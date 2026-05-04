@@ -1,60 +1,54 @@
 import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
 import {
   discoverFromTicketmasterWeb,
-  validateTicketmasterEvent,
-  addDiscoveredEvent,
-  discoverFromTicketmasterAPI,
+  discoverFromWebSearch,
+  discoverFromBalletDirectories,
 } from "@/services/discoveryService";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 60; // Max for Vercel Paid Tier
 
-export async function POST() {
+export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const stats = {
-    tm_api_added: 0,
-    tm_web_discovered: 0,
-    tm_web_processed: 0,
-    tm_web_added: 0,
+    discovered: 0,
+    queued: 0,
     errors: 0,
   };
 
   try {
-    // 1. Optional API Discovery
-    stats.tm_api_added = await discoverFromTicketmasterAPI();
+    // 1. Multi-source Discovery
+    const tmUrls = await discoverFromTicketmasterWeb();
+    const webUrls = await discoverFromWebSearch();
+    const dirUrls = await discoverFromBalletDirectories();
 
-    // 2. Requirement 1: Limit Route Work
-    // Discover many, but process a small batch to stay under maxDuration
-    const webUrls = await discoverFromTicketmasterWeb();
-    stats.tm_web_discovered = webUrls.length;
+    const allUrls = Array.from(new Set([...tmUrls, ...webUrls, ...dirUrls]));
+    stats.discovered = allUrls.length;
 
-    // Only process the first 15 URLs per run for safety on Vercel
-    const batchToProcess = webUrls.slice(0, 15);
-
-    for (const url of batchToProcess) {
-      stats.tm_web_processed++;
-
-      const validation = await validateTicketmasterEvent(url);
-
-      if (validation.valid && validation.metadata) {
-        const res = await addDiscoveredEvent(validation.metadata);
-        if (res.added) {
-          stats.tm_web_added++;
-        } else {
-          stats.errors++;
-        }
+    // 2. Fast Queue Insertion
+    for (const url of allUrls) {
+      const { error } = await supabase
+        .from("discovery_queue")
+        .upsert({ url, source: "cron_discovery_v3" }, { onConflict: "url" });
+      if (error) {
+        stats.errors++;
+      } else {
+        stats.queued++;
       }
-
-      // Minimal sleep to respect Ticketmaster rate limits
-      await new Promise((r) => setTimeout(r, 1200));
     }
 
     return NextResponse.json({
-      status: "completed",
+      status: "queued",
+      timestamp: new Date().toISOString(),
       stats,
-      message: `Processed ${stats.tm_web_processed} of ${stats.tm_web_discovered} discovered URLs.`,
     });
   } catch (error: any) {
-    console.error("[api/discover/run] Critical error:", error.message);
+    console.error("[cron/discover] Critical Failure:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
