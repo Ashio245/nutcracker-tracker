@@ -3,10 +3,15 @@ import { supabase } from "@/lib/supabase";
 import {
   discoverFromWebSearch,
   discoverFromBalletDirectories,
+  discoverFromTicketmasterWeb,
 } from "@/services/discoveryService";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Updated Protected Discovery Route
+ * Orchestrates URL gathering from Search, Directories, and Ticketmaster Web.
+ */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
@@ -18,21 +23,27 @@ export async function GET(request: NextRequest) {
   const stats = { discovered: 0, queued: 0, errors: 0 };
 
   try {
-    const [webUrls, dirUrls] = await Promise.all([
+    // Call all 3 discovery sources in parallel
+    const [webUrls, dirUrls, tmUrls] = await Promise.all([
       discoverFromWebSearch(),
       discoverFromBalletDirectories(),
+      discoverFromTicketmasterWeb(),
     ]);
 
-    const allUrls = Array.from(new Set([...webUrls, ...dirUrls])).slice(0, 20);
+    // Merge and deduplicate all discovered candidate URLs
+    const allUrls = Array.from(
+      new Set([...webUrls, ...dirUrls, ...tmUrls]),
+    ).slice(0, 50);
     stats.discovered = allUrls.length;
 
     if (allUrls.length > 0) {
+      // Batch upsert to the discovery queue while preserving existing 'attempted' status
       const { data, error } = await supabase
         .from("discovery_queue")
         .upsert(
           allUrls.map((url) => ({
             url,
-            source: "cron_discovery_v6_fast",
+            source: "cron_discovery_v7_merged",
             attempted: false,
           })),
           { onConflict: "url", ignoreDuplicates: true },
@@ -44,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      status: "discovery_fast_complete",
+      status: "discovery_complete",
       timestamp: new Date().toISOString(),
       stats,
     });

@@ -1,11 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Event, EventStatus } from "@/types/database";
 
-/**
- * Service for Nutcracker event discovery.
- * Refactored for "Pure Discovery" to prevent Vercel timeouts.
- */
-
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
 const DELAY_MS = 1500;
@@ -33,7 +28,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * PURE DISCOVERY: Web Search
- * Returns candidate URLs from DuckDuckGo without fetching or validating them.
+ * Returns candidate URLs from DuckDuckGo search results.
  */
 export async function discoverFromWebSearch(): Promise<string[]> {
   const filterString = SECONDARY_MARKET_DENYLIST.map(
@@ -53,8 +48,6 @@ export async function discoverFromWebSearch(): Promise<string[]> {
 
     if (!response.ok) return [];
     const html = await response.text();
-
-    // Extract result links only
     const genericMatches = html.matchAll(
       /<a\s+[^>]*href="(https?:\/\/[^"]+)"/gi,
     );
@@ -74,7 +67,7 @@ export async function discoverFromWebSearch(): Promise<string[]> {
 
 /**
  * PURE DISCOVERY: Ballet Directories
- * Generates candidate URLs based on known company domains.
+ * Generates candidate URLs based on official company domains.
  */
 export async function discoverFromBalletDirectories(): Promise<string[]> {
   const urls: string[] = [];
@@ -83,8 +76,6 @@ export async function discoverFromBalletDirectories(): Promise<string[]> {
     "/productions/nutcracker",
     "/performances/nutcracker",
   ];
-
-  // Example primary domains (In production, these could be fetched from a static list)
   const companies = [
     "https://www.nycballet.com",
     "https://www.pnb.org",
@@ -101,7 +92,7 @@ export async function discoverFromBalletDirectories(): Promise<string[]> {
 
 /**
  * PURE DISCOVERY: Ticketmaster Web
- * Scrapes search results for URLs only. No page-level validation here.
+ * Improved scraper to reliably extract Ticketmaster event URLs.
  */
 export async function discoverFromTicketmasterWeb(): Promise<string[]> {
   const searchUrl = "https://www.ticketmaster.com/search?q=nutcracker";
@@ -115,7 +106,9 @@ export async function discoverFromTicketmasterWeb(): Promise<string[]> {
     if (!response.ok) return [];
 
     const html = await response.text();
-    const hrefPattern = /href=["']([^"']+\/event\/[^"']+)["']/gi;
+    // Targeted regex to capture absolute and relative event links
+    const hrefPattern =
+      /href=["']((?:https:\/\/www\.ticketmaster\.com)?\/event\/[^"']+)["']/gi;
     const matches = Array.from(html.matchAll(hrefPattern));
 
     for (const match of matches) {
@@ -135,8 +128,7 @@ export async function discoverFromTicketmasterWeb(): Promise<string[]> {
 }
 
 /**
- * VALIDATION: Ticketmaster Event
- * Performed only in the process-discovery route.
+ * VALIDATION: Page-level analysis and metadata extraction.
  */
 export async function validateTicketmasterEvent(url: string) {
   try {
@@ -164,7 +156,7 @@ export async function validateTicketmasterEvent(url: string) {
 }
 
 /**
- * METADATA EXTRACTION
+ * METADATA EXTRACTION: Normalizes raw HTML into database schema.
  */
 export function extractEventMetadata(
   url: string,
@@ -196,7 +188,7 @@ export function extractEventMetadata(
 }
 
 /**
- * DB PERSISTENCE
+ * PERSISTENCE: Upserts normalized event to Supabase.
  */
 export async function addDiscoveredEvent(
   metadata: Partial<Event>,
@@ -227,7 +219,6 @@ function isValidDiscoveryCandidate(url: string): boolean {
   }
 }
 
-// Minimal placeholder for legacy route compatibility
 export async function validateEventPage(url: string) {
   const res = await validateTicketmasterEvent(url);
   return { valid: res.valid, html: res.html };
