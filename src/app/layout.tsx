@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { Outfit } from "next/font/google";
 import Navigation from "@/components/Navigation";
 import "./globals.css";
+
+const outfit = Outfit({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Nutcracker Tracker",
@@ -31,9 +34,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen relative overflow-x-hidden antialiased">
-        <div className="fixed -top-24 -left-24 w-96 h-96 bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
-        <div className="fixed -bottom-24 -right-24 w-96 h-96 bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none" />
+      <body className={`${outfit.className} min-h-screen relative overflow-x-hidden antialiased`}>
+        <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-600/40 blur-[150px] rounded-full pointer-events-none" />
+        <div className="fixed bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-blue-600/30 blur-[150px] rounded-full pointer-events-none" />
 
         <Navigation />
         <div className="relative z-10">{children}</div>

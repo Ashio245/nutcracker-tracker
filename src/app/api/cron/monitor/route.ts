@@ -1,20 +1,35 @@
-import { NextResponse } from "next/server";
-import { runMonitoring } from "@/services/monitorService";
+import { NextResponse, NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`)
-    return new Response("Unauthorized", { status: 401 });
+export async function POST(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+
+  if (!secret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET is not configured on the server" },
+      { status: 500 },
+    );
+  }
 
   try {
-    const results = await runMonitoring(25); // Process 25 per run
-    return NextResponse.json({ status: "success", ...results });
+    const { origin } = new URL(request.url);
+    const targetUrl = `${origin}/api/cron/process-discovery`;
+
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
+      cache: "no-store",
+    });
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
   } catch (error: any) {
+    console.error("[api/monitor] Wrapper Error:", error.message);
     return NextResponse.json(
-      { status: "error", message: error.message },
+      { error: "Failed to trigger monitor process", details: error.message },
       { status: 500 },
     );
   }
