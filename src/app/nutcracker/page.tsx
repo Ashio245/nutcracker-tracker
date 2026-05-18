@@ -132,9 +132,19 @@ export default function NutcrackerDashboard() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [groupByLocation, setGroupByLocation] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
+
+    try {
+      const sessionRes = await fetch("/api/auth/session");
+      if (sessionRes.ok) {
+        const { role } = await sessionRes.json();
+        setUserRole(role);
+      }
+    } catch (e) {}
+
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -285,18 +295,20 @@ export default function NutcrackerDashboard() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => runAction("discovery")}
-              disabled={!!isRunning}
-              className="mac-button-primary text-xs px-4 py-2 flex items-center gap-1.5"
-            >
-              {isRunning === "discovery" || isRunning === "auto-sync" ? (
-                <FiRefreshCw className="w-3 h-3 animate-spin" />
-              ) : (
-                <FiSearch className="w-3 h-3" />
-              )}
-              {isRunning === "auto-sync" ? "Syncing…" : "Sync Events"}
-            </button>
+            {userRole === "admin" && (
+              <button
+                onClick={() => runAction("discovery")}
+                disabled={!!isRunning}
+                className="mac-button-primary text-xs px-4 py-2 flex items-center gap-1.5"
+              >
+                {isRunning === "discovery" || isRunning === "auto-sync" ? (
+                  <FiRefreshCw className="w-3 h-3 animate-spin" />
+                ) : (
+                  <FiSearch className="w-3 h-3" />
+                )}
+                {isRunning === "auto-sync" ? "Syncing…" : "Sync Events"}
+              </button>
+            )}
           </div>
         </header>
 

@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { logout } from "@/app/login/actions";
 
-export default function Navigation() {
+export default function Navigation({ userRole }: { userRole?: string }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -23,10 +26,14 @@ export default function Navigation() {
   };
 
   const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/nutcracker", label: "Dashboard" },
-    { href: "/admin/scraper", label: "Scraper" },
-  ];
+    { href: "/", label: "Home", role: "all" },
+    { href: "/nutcracker", label: "Dashboard", role: "all" },
+    { href: "/admin/scraper", label: "Scraper", role: "admin" },
+  ].filter((link) => link.role === "all" || link.role === userRole);
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   return (
     <nav className="fixed top-0 w-full z-50 glass h-14 flex items-center justify-center px-6">
@@ -76,6 +83,15 @@ export default function Navigation() {
               </svg>
             )}
           </button>
+
+          {userRole && (
+            <button
+              onClick={handleLogout}
+              className="text-xs font-semibold text-muted hover:text-red-500 transition-colors ml-2"
+            >
+              Logout
+            </button>
+          )}
         </div>
       </div>
     </nav>
