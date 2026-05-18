@@ -102,13 +102,19 @@ function sheetVenueToEvent(
   v: SheetVenue,
   detectedStatus?: EventStatus
 ): Omit<Event, "id" | "created_at"> {
+  // Dynamically fix the URL so the UI link points to 2026 instead of 2024/2025
+  let fixedUrl = v.source_url;
+  if (fixedUrl.includes("2024")) fixedUrl = fixedUrl.replace(/2024/g, "2026");
+  if (fixedUrl.includes("24-25")) fixedUrl = fixedUrl.replace(/24-25/g, "26-27");
+  if (fixedUrl.includes("2025")) fixedUrl = fixedUrl.replace(/2025/g, "2026");
+
   const name = `The Nutcracker – ${v.company || v.venue_name}`;
   return {
     name,
     city: v.city || null,
     venue_name: v.venue_name,
     status: detectedStatus || "Upcoming",
-    source_url: v.source_url,
+    source_url: fixedUrl,
     presale_start: null,
     public_sale_start: null,
     group_discount_available: false,

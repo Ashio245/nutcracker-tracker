@@ -342,7 +342,13 @@ function curatedToEvent(
  */
 async function detectSaleStatus(url: string): Promise<EventStatus> {
   try {
-    const response = await fetch(url, {
+    // Dynamically attempt to fix old URLs (2024 -> 2026, 24-25 -> 26-27)
+    let fetchUrl = url;
+    if (fetchUrl.includes("2024")) fetchUrl = fetchUrl.replace(/2024/g, "2026");
+    if (fetchUrl.includes("24-25")) fetchUrl = fetchUrl.replace(/24-25/g, "26-27");
+    if (fetchUrl.includes("2025")) fetchUrl = fetchUrl.replace(/2025/g, "2026");
+
+    const response = await fetch(fetchUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -350,9 +356,18 @@ async function detectSaleStatus(url: string): Promise<EventStatus> {
       signal: AbortSignal.timeout(6000),
     });
 
-    if (!response.ok) return "Upcoming";
+    if (!response.ok) {
+      // If the 2026 URL 404s, they definitely aren't on sale yet!
+      return "Upcoming";
+    }
 
     const html = (await response.text()).toLowerCase();
+
+    // Critical Accuracy Check: If the page still says 2024 or 2025, and NOT 2026, it is an outdated page!
+    const isOutdated = (html.includes("2024") || html.includes("2025")) && !html.includes("2026");
+    if (isOutdated) {
+      return "Upcoming";
+    }
 
     // Check for on-sale indicators
     if (
