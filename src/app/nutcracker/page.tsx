@@ -220,6 +220,25 @@ export default function NutcrackerDashboard() {
       });
   }, [allVenues, search, activeTab]);
 
+  /** Group filtered venues by state/country for easier reading */
+  const groupedVenues = useMemo(() => {
+    const groups: Record<string, VenueGroup[]> = {};
+    filteredVenues.forEach((v) => {
+      let state = "Other";
+      if (v.city) {
+        const parts = v.city.split(",");
+        if (parts.length > 1) {
+          state = parts[parts.length - 1].trim();
+        } else {
+          state = v.city.trim();
+        }
+      }
+      if (!groups[state]) groups[state] = [];
+      groups[state].push(v);
+    });
+    return groups;
+  }, [filteredVenues]);
+
   const stats = useMemo(() => {
     const total = allVenues.length;
     const onsale = allVenues.filter((v) => v.status === "Public Sale Live").length;
@@ -355,15 +374,29 @@ export default function NutcrackerDashboard() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-            {filteredVenues.map((venue) => (
-              <VenueCard
-                key={venue.key}
-                venue={venue}
-                isExpanded={expandedKey === venue.key}
-                onToggle={() => setExpandedKey(expandedKey === venue.key ? null : venue.key)}
-              />
-            ))}
+          <div className="space-y-12 stagger-children">
+            {Object.keys(groupedVenues)
+              .sort()
+              .map((state) => (
+                <div key={state} className="space-y-4">
+                  <div className="flex items-center gap-3 pb-2 border-b border-[var(--panel-border)]">
+                    <h2 className="text-xl font-bold tracking-tight text-main">{state}</h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-[var(--panel-bg)] border border-[var(--panel-border)] text-xs font-semibold text-muted">
+                      {groupedVenues[state].length} {groupedVenues[state].length === 1 ? 'venue' : 'venues'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groupedVenues[state].map((venue) => (
+                      <VenueCard
+                        key={venue.key}
+                        venue={venue}
+                        isExpanded={expandedKey === venue.key}
+                        onToggle={() => setExpandedKey(expandedKey === venue.key ? null : venue.key)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
           </div>
         )}
 
