@@ -369,22 +369,28 @@ async function detectSaleStatus(url: string): Promise<EventStatus> {
       return "Upcoming";
     }
 
-    // Check for on-sale indicators
+    // 1. Check for sold out indicators
     if (
-      html.includes("buy tickets") ||
-      html.includes("purchase tickets") ||
-      html.includes("get tickets") ||
-      html.includes("book now") ||
-      html.includes("add to cart") ||
-      html.includes("select seats") ||
-      html.includes("choose your seats") ||
-      html.includes("on sale now") ||
-      html.includes("get your tickets")
+      html.includes("sold out") ||
+      html.includes("soldout") ||
+      html.includes("no longer available")
     ) {
-      return "Public Sale Live";
+      return "Sold Out";
     }
 
-    // Check for presale indicators
+    // 2. Check for upcoming/notify indicators (Must be before general 'sale' checks!)
+    if (
+      html.includes("notify me") ||
+      html.includes("be notified") ||
+      html.includes("sign up") ||
+      html.includes("coming soon") ||
+      html.includes("on sale soon") ||
+      html.includes("tickets go on sale")
+    ) {
+      return "On Sale Soon";
+    }
+
+    // 3. Check for presale indicators
     if (
       html.includes("presale") ||
       html.includes("pre-sale") ||
@@ -395,25 +401,26 @@ async function detectSaleStatus(url: string): Promise<EventStatus> {
       return "Presale Live";
     }
 
-    // Check for sold out indicators
+    // 4. Check for on-sale indicators (Expanded for higher catch rate)
     if (
-      html.includes("sold out") ||
-      html.includes("soldout") ||
-      html.includes("no longer available")
+      html.includes("buy tickets") ||
+      html.includes("purchase tickets") ||
+      html.includes("get tickets") ||
+      html.includes("order tickets") ||
+      html.includes("find tickets") ||
+      html.includes("buy now") ||
+      html.includes("book now") ||
+      html.includes("add to cart") ||
+      html.includes("select seats") ||
+      html.includes("choose your seats") ||
+      html.includes("on sale now") ||
+      html.includes("get your tickets") ||
+      html.includes("buy_seats_message") || 
+      html.includes("on_sale_message") ||
+      // If we are on a verified 2026 page and it just broadly says "tickets", assume it's live!
+      (html.includes("tickets") && fetchUrl.includes("2026"))
     ) {
-      return "Sold Out";
-    }
-
-    // Check for upcoming/notify indicators
-    if (
-      html.includes("notify me") ||
-      html.includes("be notified") ||
-      html.includes("sign up") ||
-      html.includes("coming soon") ||
-      html.includes("on sale soon") ||
-      html.includes("tickets go on sale")
-    ) {
-      return "On Sale Soon";
+      return "Public Sale Live";
     }
 
     return "Upcoming";
