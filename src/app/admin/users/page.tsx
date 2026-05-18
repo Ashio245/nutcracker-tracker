@@ -50,10 +50,7 @@ export default function UsersPage() {
       setInviteStatus(result.success || "Invited!");
       setInviteEmail("");
       await fetchUsers();
-      setTimeout(() => {
-        setShowInviteForm(false);
-        setInviteStatus(null);
-      }, 2500);
+      // We don't auto-close anymore so the admin has time to copy the temporary password
     }
   };
 

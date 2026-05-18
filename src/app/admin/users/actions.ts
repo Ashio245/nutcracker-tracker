@@ -89,25 +89,32 @@ export async function inviteUser(email: string, role: "admin" | "member") {
 
     const adminAuth = createAdminClient();
     
-    const { data, error } = await adminAuth.auth.admin.inviteUserByEmail(email, {
-      data: { role } // Assign the role immediately
+    // Check if user already exists
+    const { data: { users } } = await adminAuth.auth.admin.listUsers();
+    const existingUser = users.find(u => u.email === email);
+    
+    if (existingUser) {
+      await adminAuth.auth.admin.updateUserById(existingUser.id, { user_metadata: { role } });
+      revalidatePath("/admin/users");
+      return { success: "User already existed. We just updated their role to " + role + "!" };
+    }
+
+    // Bypass Supabase email rate limits by directly creating the user as auto-confirmed
+    const tempPassword = Math.random().toString(36).slice(-8) + "!"; // Random 9 char password
+    
+    const { error } = await adminAuth.auth.admin.createUser({
+      email: email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { role }
     });
 
     if (error) {
-      if (error.message.includes("already registered")) {
-        const { data: { users } } = await adminAuth.auth.admin.listUsers();
-        const existingUser = users.find(u => u.email === email);
-        if (existingUser) {
-          await adminAuth.auth.admin.updateUserById(existingUser.id, { user_metadata: { role } });
-          revalidatePath("/admin/users");
-          return { success: "User already exists. Updated their role instead!" };
-        }
-      }
       throw error;
     }
 
     revalidatePath("/admin/users");
-    return { success: `Invited ${email} as ${role}!` };
+    return { success: `Success! Account created as ${role}. Temporary Password: ${tempPassword}` };
   } catch (err: any) {
     return { error: err.message };
   }
