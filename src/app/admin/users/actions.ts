@@ -63,7 +63,6 @@ export async function updateUserRole(userId: string, newRole: "admin" | "member"
       throw error;
     }
 
-    revalidatePath("/admin/users");
     return { success: true };
   } catch (err: any) {
     return { error: err.message };
@@ -95,7 +94,6 @@ export async function inviteUser(email: string, role: "admin" | "member") {
     
     if (existingUser) {
       await adminAuth.auth.admin.updateUserById(existingUser.id, { user_metadata: { role } });
-      revalidatePath("/admin/users");
       return { success: "User already existed. We just updated their role to " + role + "!" };
     }
 
@@ -113,7 +111,8 @@ export async function inviteUser(email: string, role: "admin" | "member") {
       throw error;
     }
 
-    revalidatePath("/admin/users");
+    // We don't use revalidatePath here because it resets client state.
+    // The client component calls fetchUsers() to update the list instead.
     return { success: `Success! Account created as ${role}. Temporary Password: ${tempPassword}` };
   } catch (err: any) {
     return { error: err.message };

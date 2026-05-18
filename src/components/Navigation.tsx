@@ -30,6 +30,7 @@ export default function Navigation({ userRole }: { userRole?: string }) {
     { href: "/nutcracker", label: "Dashboard", role: "all" },
     { href: "/admin/scraper", label: "Scraper", role: "admin" },
     { href: "/admin/users", label: "Team", role: "admin" },
+    { href: "/update-password", label: "Security", role: "all" },
   ].filter((link) => link.role === "all" || link.role === userRole);
 
   const handleLogout = async () => {
