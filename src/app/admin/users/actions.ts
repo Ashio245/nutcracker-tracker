@@ -118,3 +118,38 @@ export async function inviteUser(email: string, role: "admin" | "member") {
     return { error: err.message };
   }
 }
+
+export async function deleteUser(userId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+      
+    const isUserAdmin = user?.email && adminEmails.includes(user.email.toLowerCase());
+    const callerRole = isUserAdmin ? "admin" : (user?.user_metadata?.role || "member");
+
+    if (callerRole !== "admin") {
+      throw new Error("Unauthorized");
+    }
+
+    // Prevent an admin from deleting themselves
+    if (user?.id === userId) {
+      throw new Error("You cannot delete your own account.");
+    }
+
+    const adminAuth = createAdminClient();
+    const { error } = await adminAuth.auth.admin.deleteUser(userId);
+
+    if (error) {
+      throw error;
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}

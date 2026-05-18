@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUsers, updateUserRole, inviteUser } from "./actions";
+import { getUsers, updateUserRole, inviteUser, deleteUser } from "./actions";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -36,6 +36,18 @@ export default function UsersPage() {
       alert("Failed to update role: " + result.error);
     } else {
       await fetchUsers(); // Refresh the list
+    }
+  };
+
+  const handleDelete = async (userId: string, email: string) => {
+    if (!window.confirm(`Are you absolutely sure you want to completely remove ${email}? This cannot be undone.`)) {
+      return;
+    }
+    const result = await deleteUser(userId);
+    if (result.error) {
+      alert("Failed to remove user: " + result.error);
+    } else {
+      await fetchUsers();
     }
   };
 
@@ -159,12 +171,20 @@ export default function UsersPage() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        <button
-                          onClick={() => handleRoleChange(u.id, role)}
-                          className="text-xs font-semibold text-[var(--accent-color)] hover:text-[var(--accent-hover)] transition-colors"
-                        >
-                          Make {role === "admin" ? "Member" : "Admin"}
-                        </button>
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => handleRoleChange(u.id, role)}
+                            className="text-xs font-semibold text-[var(--accent-color)] hover:text-[var(--accent-hover)] transition-colors"
+                          >
+                            Make {role === "admin" ? "Member" : "Admin"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(u.id, u.email)}
+                            className="text-xs font-semibold text-red-500 hover:text-red-400 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
