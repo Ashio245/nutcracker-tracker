@@ -131,6 +131,7 @@ export default function NutcrackerDashboard() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [groupByLocation, setGroupByLocation] = useState(false);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -338,16 +339,27 @@ export default function NutcrackerDashboard() {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-          <input
-            type="text"
-            placeholder="Search by production, venue, or city…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--panel-bg)] border border-[var(--panel-border)] text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
-          />
+        {/* Search and Toggle */}
+        <div className="flex flex-col md:flex-row gap-4 justify-between md:items-center">
+          <div className="relative flex-1 md:max-w-md">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+            <input
+              type="text"
+              placeholder="Search by production, venue, or city…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--panel-bg)] border border-[var(--panel-border)] text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+            />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={groupByLocation}
+              onChange={(e) => setGroupByLocation(e.target.checked)}
+              className="w-4 h-4 rounded accent-[var(--accent-color)] border-[var(--panel-border)]"
+            />
+            <span className="text-sm font-medium text-muted">Group by Location</span>
+          </label>
         </div>
 
         {/* Cards Grid */}
@@ -373,7 +385,7 @@ export default function NutcrackerDashboard() {
                 : "Click Sync Events to discover Nutcracker productions."}
             </p>
           </div>
-        ) : (
+        ) : groupByLocation ? (
           <div className="space-y-12 stagger-children">
             {Object.keys(groupedVenues)
               .sort()
@@ -397,6 +409,17 @@ export default function NutcrackerDashboard() {
                   </div>
                 </div>
               ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+            {filteredVenues.map((venue) => (
+              <VenueCard
+                key={venue.key}
+                venue={venue}
+                isExpanded={expandedKey === venue.key}
+                onToggle={() => setExpandedKey(expandedKey === venue.key ? null : venue.key)}
+              />
+            ))}
           </div>
         )}
 
